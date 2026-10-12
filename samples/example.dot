@@ -1,0 +1,13 @@
+digraph Example {
+    rankdir=LR;
+    node [shape=box, style="rounded,filled", fillcolor="#e8f0fe", fontname="Helvetica"];
+    edge [fontname="Helvetica", fontsize=10];
+
+    open    [label="Open .dot file"];
+    render  [label="Render with Graphviz"];
+    show    [label="Show graph"];
+    watch   [label="Watch for changes", fillcolor="#fff4d6"];
+
+    open -> render -> show -> watch;
+    watch -> render [label="file changed", style=dashed];
+}
