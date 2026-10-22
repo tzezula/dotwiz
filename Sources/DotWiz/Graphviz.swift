@@ -98,6 +98,7 @@ enum Graphviz {
         fileURL: URL,
         format: String,
         engine: LayoutEngine,
+        extraArguments: [String] = [],
         completion: @escaping (Result<RenderResult, Error>) -> Void
     ) -> RenderJob {
         let job = RenderJob()
@@ -108,6 +109,7 @@ enum Graphviz {
                 if engine != .automatic {
                     arguments.append("-K\(engine.rawValue)")
                 }
+                arguments += extraArguments
                 arguments.append(fileURL.path)
                 result = Result {
                     try job.run(

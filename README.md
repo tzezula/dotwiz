@@ -34,7 +34,10 @@ Then open a file with `open -a DotWiz graph.dot`, File ▸ Open…, or Finder's 
   stays visible until the file is fixed.
 - View ▸ Layout Engine: Automatic (honours the graph's `layout` attribute), dot, neato,
   fdp, sfdp, circo, twopi, osage, patchwork.
-- File ▸ Export… to PNG, SVG or PDF.
+- File ▸ Export ▸ PNG / JPEG / PDF / SVG (⇧⌘E for PNG). Bitmap exports offer
+  96, 192 (2×) or 300 dpi.
+- File ▸ Print… (⌘P) prints the graph as shown, scaled to fit the page and rotated to
+  match its orientation; Page Setup… (⇧⌘P) picks paper size.
 - Multiple windows/tabs, Open Recent, ⌘R to force a reload.
 
 ## Debugging

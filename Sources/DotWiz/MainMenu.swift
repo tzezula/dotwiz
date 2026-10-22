@@ -1,10 +1,10 @@
 import AppKit
 
 enum MainMenu {
-    static func build(appName: String, recentMenu: NSMenu) -> NSMenu {
+    static func build(appName: String) -> NSMenu {
         let main = NSMenu()
         main.addItem(submenu(appMenu(appName: appName)))
-        main.addItem(submenu(fileMenu(recentMenu: recentMenu)))
+        main.addItem(submenu(fileMenu()))
         main.addItem(submenu(viewMenu()))
         let window = windowMenu()
         main.addItem(submenu(window))
@@ -48,15 +48,30 @@ enum MainMenu {
         return menu
     }
 
-    private static func fileMenu(recentMenu: NSMenu) -> NSMenu {
+    private static func fileMenu() -> NSMenu {
         let menu = NSMenu(title: "File")
         menu.addItem(item("Open…", #selector(NSDocumentController.openDocument(_:)), "o"))
-        menu.addItem(submenu(recentMenu))
+        // AppKit inserts its own "Open Recent" submenu after the openDocument: item.
         menu.addItem(.separator())
         menu.addItem(item("Close", #selector(NSWindow.performClose(_:)), "w"))
         menu.addItem(.separator())
-        menu.addItem(item("Export…", #selector(GraphWindowController.exportGraph(_:)), "e", modifiers: [.command, .shift]))
+        let export = NSMenu(title: "Export")
+        for (index, format) in ExportFormat.allCases.enumerated() {
+            let entry = item(
+                "\(format.title)…",
+                #selector(GraphWindowController.exportGraph(_:)),
+                index == 0 ? "e" : "",
+                modifiers: [.command, .shift]
+            )
+            entry.representedObject = format.rawValue
+            export.addItem(entry)
+        }
+        menu.addItem(submenu(export))
+        menu.addItem(.separator())
         menu.addItem(item("Show in Finder", #selector(GraphWindowController.revealSourceInFinder(_:)), "r", modifiers: [.command, .shift]))
+        menu.addItem(.separator())
+        menu.addItem(item("Page Setup…", #selector(NSDocument.runPageLayout(_:)), "p", modifiers: [.command, .shift]))
+        menu.addItem(item("Print…", #selector(NSDocument.printDocument(_:)), "p"))
         return menu
     }
 

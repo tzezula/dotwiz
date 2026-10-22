@@ -13,6 +13,8 @@ final class GraphWindowController: NSWindowController, NSWindowDelegate, NSMenuI
     private var currentJob: RenderJob?
     private var hasRenderedOnce = false
 
+    private static let exportResolutionKey = "ExportResolution"
+
     private var graphDocument: GraphDocument? { document as? GraphDocument }
     private var sourceURL: URL? { graphDocument?.sourceURL }
 
@@ -60,6 +62,11 @@ final class GraphWindowController: NSWindowController, NSWindowDelegate, NSMenuI
 
         window.contentView = stack
         window.initialFirstResponder = pdfView
+    }
+
+    /// The graph currently on screen, or nil if nothing has rendered successfully yet.
+    var renderedGraph: PDFDocument? {
+        hasRenderedOnce ? pdfView.document : nil
     }
 
     override var document: AnyObject? {
@@ -200,34 +207,61 @@ final class GraphWindowController: NSWindowController, NSWindowDelegate, NSMenuI
 
     @objc func exportGraph(_ sender: Any?) {
         guard let window, let url = sourceURL, let document = graphDocument else { return }
-        let formats: [(title: String, format: String, type: UTType)] = [
-            ("PNG", "png", .png),
-            ("SVG", "svg", .svg),
-            ("PDF", "pdf", .pdf),
-        ]
+        let initial = ((sender as? NSMenuItem)?.representedObject as? String).flatMap(ExportFormat.init) ?? .png
+        let formats = ExportFormat.allCases
+        let resolutions = ExportResolution.allCases
+        let defaults = UserDefaults.standard
+        let savedResolution = ExportResolution(rawValue: defaults.integer(forKey: Self.exportResolutionKey)) ?? .retina
 
         let panel = NSSavePanel()
+        panel.title = "Export as \(initial.title)"
         panel.nameFieldStringValue = url.deletingPathExtension().lastPathComponent
-        panel.allowedContentTypes = [formats[0].type]
+        panel.allowedContentTypes = [initial.contentType]
         panel.isExtensionHidden = false
 
-        let popup = NSPopUpButton()
-        popup.addItems(withTitles: formats.map(\.title))
-        let label = NSTextField(labelWithString: "Format:")
-        let accessory = NSStackView(views: [label, popup])
-        accessory.edgeInsets = NSEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
+        let formatPopup = NSPopUpButton()
+        formatPopup.addItems(withTitles: formats.map(\.title))
+        formatPopup.selectItem(at: formats.firstIndex(of: initial) ?? 0)
+        let resolutionPopup = NSPopUpButton()
+        resolutionPopup.addItems(withTitles: resolutions.map(\.title))
+        resolutionPopup.selectItem(at: resolutions.firstIndex(of: savedResolution) ?? 0)
+        resolutionPopup.isEnabled = initial.isRaster
+
+        let grid = NSGridView(views: [
+            [NSTextField(labelWithString: "Format:"), formatPopup],
+            [NSTextField(labelWithString: "Resolution:"), resolutionPopup],
+        ])
+        grid.column(at: 0).xPlacement = .trailing
+        grid.rowAlignment = .firstBaseline
+        let accessory = NSStackView(views: [grid])
+        accessory.edgeInsets = NSEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
         panel.accessoryView = accessory
-        let selectionHandler = PopupHandler { [weak panel] index in
-            panel?.allowedContentTypes = [formats[index].type]
+
+        let selectionHandler = PopupHandler { [weak panel, weak resolutionPopup] index in
+            let format = formats[index]
+            panel?.allowedContentTypes = [format.contentType]
+            panel?.title = "Export as \(format.title)"
+            resolutionPopup?.isEnabled = format.isRaster
         }
-        popup.target = selectionHandler
-        popup.action = #selector(PopupHandler.selectionChanged(_:))
+        formatPopup.target = selectionHandler
+        formatPopup.action = #selector(PopupHandler.selectionChanged(_:))
 
         panel.beginSheetModal(for: window) { [weak self] response in
             withExtendedLifetime(selectionHandler) {}
             guard response == .OK, let destination = panel.url else { return }
-            let format = formats[popup.indexOfSelectedItem].format
-            Graphviz.render(fileURL: url, format: format, engine: document.layoutEngine) { result in
+            let format = formats[formatPopup.indexOfSelectedItem]
+            var arguments: [String] = []
+            if format.isRaster {
+                let resolution = resolutions[resolutionPopup.indexOfSelectedItem]
+                defaults.set(resolution.rawValue, forKey: Self.exportResolutionKey)
+                arguments.append("-Gdpi=\(resolution.rawValue)")
+            }
+            Graphviz.render(
+                fileURL: url,
+                format: format.graphvizFormat,
+                engine: document.layoutEngine,
+                extraArguments: arguments
+            ) { result in
                 do {
                     let output = try result.get()
                     guard output.succeeded else {
@@ -245,6 +279,9 @@ final class GraphWindowController: NSWindowController, NSWindowDelegate, NSMenuI
     }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(exportGraph(_:)) {
+            return sourceURL != nil
+        }
         if menuItem.action == #selector(selectLayoutEngine(_:)) {
             let selected = graphDocument?.layoutEngine.rawValue
             menuItem.state = (menuItem.representedObject as? String) == selected ? .on : .off
